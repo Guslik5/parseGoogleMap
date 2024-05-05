@@ -1,83 +1,60 @@
-from selenium import webdriver
-from bs4 import BeautifulSoup
-import time
-import io
-import json
-import xlsxwriter
+import os
+import serpapi
 import pandas as pd
-import requests
-import re
-from selenium.webdriver.chrome.options import Options
+from dotenv import load_dotenv
+#from sc_google_maps_api import ScrapeitCloudClient
 
-# для запуска безэкранного браузера Chrome, удобного для парсинга, с использованием Selenium
-# BeautifulSoup для анализа содержимого страницы результатов и извлечения данных о компаниях
+load_dotenv()
+api_key = os.getenv('4b6004436aa40defa1a4cc64fe00254c32a5c990a20835ff52f13303b2737821')
+#client = ScrapeitCloudClient(api_key='6ee3658b-1453-40c2-97a7-c73c5eaa6e15')
+client = serpapi.Client(api_key=api_key)
+#start = 0
 
-# запускаем безэкранный браузер Chrome
+# Locations to search for real estate agencies
+locations = {
+    'UAE': '25.276987,55.296249',
+    'Turkey': '38.963745,35.243322',
+    'Cyprus': '35.126413,33.429859',
+    'Thailand': '13.736717,100.523186'
+}
 
-webdriver.Chrome('')
+# Initialize DataFrame to store results
+all_results = pd.DataFrame(columns=["Title", "Address", "Phone Number", "Website", "Location"])
+print(all_results)
+for location_name in locations:
+    #start = 0
+    while True:
+        results = client.search({
+            'engine': 'google_maps',
+            'q': 'real estate agency',
+            'name': 'location_name',
+            'type': 'search',
+            #'start': start
+        })
 
+        if 'local_results' not in results or len(results['local_results']) == 0:
+            print(f'No more local results for {location_name}')
+            break
 
-# отправляем запрос на получение данных с карты и получаем результаты
-search_term = "pizza restaurants in Moscow"
-search_url = f"https://www.google.com/maps/search/{search_term}"
+        #start += 20
 
-response = requests.get(search_url)
-page_content = response.text
+        local_results = results['local_results']
 
-# теперь анализируем данные
-soup = BeautifulSoup(page_content, 'html.parser')
+        for result in local_results:
+            title = result["title"]
+            address = result["address"]
+            phone = result["phone"] if "phone" in result else ""
+            website = result["website"] if "website" in result else ""
 
-for result in soup.select('.section-result'):
+            all_results = all_results.append({
+                "Title": title,
+                "Address": address,
+                "Phone Number": phone,
+                "Website": website,
+                "Location": location_name
+            }, ignore_index=True)
 
-  title = result.h3.text
-  address = result.find('span', 'address').text
-
-  try:
-    rating = result.find('span', 'cards-rating-score').text
-  except AttributeError:
-    rating = None
-
-  print(title, address, rating )
-
-# также нужно парсить все страницы (то есть нужно обработать нумерацию страниц)
-
-for page in range(1, 10):
-
-  url = f"{search_url}/p{page}"
-
-
-
-# Следующая страница
-  next_page = soup.find('a', string=re.compile(r'Next'))
-
-  if not next_page:
-    break
-
-print('Очистка завершена!')
-
-# Мы циклически увеличиваем номера страниц, очищая каждую страницу, пока ссылка «Далее» больше не будет найдена в супе.
-# Это позволяет нам просматривать все доступные страницы и результаты.
-
-
-
-
-all_records = []
-
-for page in range(1, 10):
-
-# Scrape page
-# Extract data into dicts
-
-  for result in all_records:
-    record = {
-    'title': result['title'],
-    'address': result['address'],
-    'url': result['url']
-    }
-
-    all_records.append(record)
-
-# преобразуем данные
-#   df = pd.DataFrame(all_records)
-# df.to_xlsx('google_maps_data.xlsx', index = False)
-
+# Export DataFrame to Excel
+excel_file_path = 'real_estate_agencies.xlsx'
+all_results.to_excel(excel_file_path, index=False)
+print(f'Data written to {excel_file_path}')
